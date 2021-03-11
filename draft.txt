@@ -1,0 +1,25 @@
+use cases:
+
+get elevation points of the supporting points of a linestring
+get elevation points evenly spaced on a line string (input number of points)
+get elevation points spaced in fixed distance on a line string (input distance)
+
+automatic convert inputs to crs of raster (and reconvert the outputs)
+
+return: 
+
+elevation above seelevel
+
+calculations:
+
+get incline profile (input height profile, ouput avg inclines between points)
+linearly interpolate between brunnels
+	input elevations, distances, array of bools where should linearly interpolate
+smooth elevation profile
+subtract forest areas / urban areas (rougheness index?)
+calculate cumulative ascent / descent
+
+plots:
+plot hieght profile x distance, y height
+plot incline profile x distance, y incline
+
