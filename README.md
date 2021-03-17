@@ -19,7 +19,7 @@ python3 -m pip install -e elevation_profile/
 
 ## Examples
 
-```
+```python
 # load the DEM
 elevation_sampler = ElevationSampler("DEM.tif")
 
