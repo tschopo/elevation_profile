@@ -11,14 +11,15 @@ from scipy.signal import savgol_filter
 
 class ElevationSampler:
 
-    def __init__(self, dem_file, elevation_band=1):
+    def __init__(self, dem, elevation_band=1):
         """
         Parameters
         ----------
-            dem_file : str
+            dem : str or rasterio raster object
                 location to geotiff with elevation data
         """
-        dem = rasterio.open(dem_file)
+        if isinstance(dem, str):
+            dem = rasterio.open(dem)
         self.dem = dem
         self.elev = dem.read(1)
         self.dem_crs = CRS.from_wkt(dem.crs.to_wkt())
@@ -160,7 +161,7 @@ class ElevationSampler:
         
         return (sample_point_x_coords, sample_point_y_coords, np.append(distances, line.length), sample_point_elevation)
     
-    def interpolate_brunnels(self, elevation, brunnels, trip_geom, distance_delta=10, merge_distance=10, filter_brunnel_length=10, buffer_factor=1):
+    def interpolate_brunnels_old(self, elevation, distances, brunnels, trip_geom, distance_delta=10, merge_distance=10, filter_brunnel_length=10, buffer_factor=1):
         """
         Parameters
         ----------
@@ -225,7 +226,7 @@ class ElevationSampler:
             # + buffer
             # merge by deleting current row and adjusting values of previous row
             #print(index)
-            if index > 0 and  brunnel['start_dist'] <= brunnels.loc[index-1,'end_dist'] + 10:
+            if index > 0 and  brunnel['start_dist'] <= brunnels.loc[index-1,'end_dist'] + merge_distance:
                 brunnels.loc[index-1,'end_dist'] = brunnel['end_dist']
                 brunnels.loc[index-1,'geom'] = LineString(brunnels.loc[index-1,"geom"].coords[:] + brunnel["geom"].coords[:])
 
@@ -293,6 +294,86 @@ class ElevationSampler:
                 # take into account buffer
                 p1 = (start_dists[idx]-buffer_factor*distance_delta,start_ele)
                 p2 = (end_dists[idx]+buffer_factor*distance_delta,end_ele)
+
+                m = (p2[1] - p1[1])/ (p2[0]-p1[0])
+                c = p1[1] - m*p1[0]
+                ele_brunnel[i] = m*x+c
+
+        return ele_brunnel
+
+    def interpolate_brunnels(self, elevation, distances, brunnels, distance_delta=10):
+        """
+        Parameters
+        ----------
+            elevation : numpy array
+                The elevation values
+            distances : numpy array
+                The distances of the elevation values, as returned by method elevation_profile
+            brunnels : DataFrame 
+                Dataframe of start_dist and end_dist for each section that shoud be linearly interpolated
+            distance_delta : int
+                distance_delta between distances
+        
+        Returns
+        -------
+            elevation array where brunnels are linearly interpolted
+        """
+        
+        start_dists = brunnels['start_dist'].values
+        end_dists = brunnels['end_dist'].values
+
+        ele_brunnel = elevation.copy()
+        for i,x in enumerate(distances):
+
+            # if x in brunnel
+            # get index of brunnel
+            idx = np.argwhere((x >= start_dists-distance_delta)  & (x <= end_dists+distance_delta))
+
+            assert idx.size <= 1
+
+            if idx.size == 1:
+
+                idx = idx[0][0]
+
+                # get index of elevation data
+                start_idx = round((start_dists[idx])/distance_delta) - 1
+                end_idx = round((end_dists[idx])/distance_delta) + 1
+                
+                start_ele = None
+                end_ele = None
+
+                # if trip doesnt start with brunnel 
+                if start_idx > 0:
+                    start_ele = ele_brunnel[start_idx]
+
+                # if trip doesnt end with brunnel:
+                if end_idx < len(ele_brunnel) - 1:
+                    end_ele = ele_brunnel[end_idx]
+
+                # if trip start with brunnel
+                if start_ele == None:
+                    start_ele = end_ele
+
+                # if trip ends with brunnel
+                if end_ele == None:
+                    end_ele = start_ele
+
+                # if trip is completely brunnel
+                if start_ele == None and end_ele == None:
+
+                    # then take ele at start and ele at end as elevations
+                    start_idx = 0
+                    end_idx = round(end_dists[-1]/distance_delta)
+                    start_ele = ele_brunnel[start_idx]
+                    end_ele = ele_brunnel[end_idx]
+
+                assert start_ele != None
+                assert end_ele != None
+
+                # linearly interpolate between start and end point
+                # take into account buffer
+                p1 = (start_dists[idx]-distance_delta,start_ele)
+                p2 = (end_dists[idx]+distance_delta,end_ele)
 
                 m = (p2[1] - p1[1])/ (p2[0]-p1[0])
                 c = p1[1] - m*p1[0]
