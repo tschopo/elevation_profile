@@ -410,8 +410,8 @@ class ElevationSampler:
 
         return elevation.values
 
-    def smooth_ele(self, elevation, window_size=301, poly_order=3):
-        return savgol_filter(elevation, window_size, poly_order)
+    def smooth_ele(self, elevation, window_size=301, poly_order=3,mode="nearest"):
+        return savgol_filter(elevation, window_size, poly_order, mode=mode)
     
     def resample_ele(self, elevation, distances, distance):
         """
