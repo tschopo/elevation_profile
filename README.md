@@ -12,9 +12,18 @@ Features:
 - Automatic reference system handling
 
 ## Install
-run 
-```
+
+```sh
+git clone git@github.com:tschopo/elevation_profile.git
+cd ..
 python3 -m pip install -e elevation_profile/
+```
+
+## Update
+
+```sh
+cd elevation_profile
+git pull
 ```
 
 ## Examples
