@@ -5,6 +5,6 @@ ElevationSampler/core.py
 ElevationSampler.egg-info/PKG-INFO
 ElevationSampler.egg-info/SOURCES.txt
 ElevationSampler.egg-info/dependency_links.txt
-ElevationSampler.egg-info/not-zip-safe
 ElevationSampler.egg-info/requires.txt
 ElevationSampler.egg-info/top_level.txt
+ElevationSampler.egg-info/zip-safe

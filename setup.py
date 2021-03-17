@@ -16,5 +16,5 @@ install_requires=[
           'shapely',
           'scipy'
       ],
-zip_safe=False)
+zip_safe=True)
 
