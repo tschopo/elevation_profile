@@ -59,3 +59,16 @@ distances_22, elevation_22 = elevation_sampler.resample_ele(ele_adjusted,distanc
 incl_22 = elevation_sampler.ele_to_incl(elevation_22, distances_22, degrees=True)
  
 ```
+
+## Dependencies
+Should be automatically installed when installing with pip
+
+```
+'rasterio',
+'geopandas',
+'pandas',
+'numpy',
+'pyproj',
+'shapely',
+'scipy'
+```
