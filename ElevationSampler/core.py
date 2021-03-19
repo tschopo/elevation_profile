@@ -125,7 +125,8 @@ class ElevationSampler:
         Parameters
         ----------
             line : LineString or GeoSeries
-                either shapely linestring, must be same crs as dem, or geopandas series with 1 linestring entry the crs is converted automatically
+                either shapely linestring, must be same crs as dem, or geopandas series with 1 linestring entry the crs
+                is converted automatically
             distance : int
                 default 10. The distance between the sample points on the line. Last distance may be shorter.
             interpolated : bool
@@ -137,10 +138,8 @@ class ElevationSampler:
                 x and y coords in CRS of dem
         """
 
-        old_crs = None
         if isinstance(line, gpd.GeoSeries):
             if line.crs.to_epsg() != self.dem_crs.to_epsg():
-                old_crs = line.crs
                 line = line.to_crs(self.dem_crs)
 
             line = line.iloc[0]
@@ -162,7 +161,7 @@ class ElevationSampler:
             sample_point_y_coords.append(p_y)
             sample_point_elevation.append(self.sample_coords(p_x, p_y, interpolated=interpolated))
 
-        return (sample_point_x_coords, sample_point_y_coords, np.append(distances, line.length), sample_point_elevation)
+        return sample_point_x_coords, sample_point_y_coords, np.append(distances, line.length), sample_point_elevation
 
     def interpolate_brunnels_old(self, elevation, distances, brunnels, trip_geom, distance_delta=10, merge_distance=10,
                                  filter_brunnel_length=10, buffer_factor=1):
@@ -278,23 +277,23 @@ class ElevationSampler:
                     end_ele = ele_brunnel[end_idx]
 
                 # if trip start with brunnel
-                if start_ele == None:
+                if start_ele is None:
                     start_ele = end_ele
 
                 # if trip ends with brunnel
-                if end_ele == None:
+                if end_ele is None:
                     end_ele = start_ele
 
                 # if trip is completely brunnel
-                if start_ele == None and end_ele == None:
+                if start_ele is None and end_ele is None:
                     # then take ele at start and ele at end as elevations
                     start_idx = 0
                     end_idx = round(end_dists[-1] / distance_delta)
                     start_ele = ele_brunnel[start_idx]
                     end_ele = ele_brunnel[end_idx]
 
-                assert start_ele != None
-                assert end_ele != None
+                assert start_ele is not None
+                assert end_ele is not None
 
                 # linearly interpolate between start and end point
                 # take into account buffer
@@ -334,7 +333,7 @@ class ElevationSampler:
         # construct brunnels in steep regions
         if construct_brunnels:
 
-              # construct brunnels in steep regions
+            # construct brunnels in steep regions
             diff_kernel = np.array([1, -1])
             diff = np.convolve(np.array(elevation), diff_kernel, 'same')
 
@@ -403,7 +402,7 @@ class ElevationSampler:
                 around_brunnel = (brunnel.start_dist <= brunnels['start_dist']) & (
                         brunnel.end_dist >= brunnels['end_dist'])
 
-                if sum(start_in_brunnel | end_in_brunnel | around_brunnel) > 0:
+                if np.sum(start_in_brunnel | end_in_brunnel | around_brunnel) > 0:
                     drop_idx.append(idx)
 
             constructed_brunnels = constructed_brunnels.drop(drop_idx)
@@ -450,23 +449,23 @@ class ElevationSampler:
                     end_ele = ele_brunnel[end_idx]
 
                 # if trip start with brunnel
-                if start_ele == None:
+                if start_ele is None:
                     start_ele = end_ele
 
                 # if trip ends with brunnel
-                if end_ele == None:
+                if end_ele is None:
                     end_ele = start_ele
 
                 # if trip is completely brunnel
-                if start_ele == None and end_ele == None:
+                if start_ele is None and end_ele is None:
                     # then take ele at start and ele at end as elevations
                     start_idx = 0
                     end_idx = round(end_dists[-1] / distance_delta)
                     start_ele = ele_brunnel[start_idx]
                     end_ele = ele_brunnel[end_idx]
 
-                assert start_ele != None
-                assert end_ele != None
+                assert start_ele is not None
+                assert end_ele is not None
 
                 # linearly interpolate between start and end point
                 # take into account buffer
@@ -531,14 +530,14 @@ class ElevationSampler:
                 the distances and resampled elevations
         """
 
-        distances_interpolated = np.arange(0, distances[-1], 100)
+        distances_interpolated = np.arange(0, distances[-1], distance)
 
         if distances_interpolated[-1] <= distances[-1]:
             distances_interpolated = np.append(distances_interpolated, distances[-1])
 
         elevation_interpolated = np.interp(distances_interpolated, distances, elevation)
 
-        return (distances_interpolated, elevation_interpolated)
+        return distances_interpolated, elevation_interpolated
 
         # return subset of elevation, resampled at distance
 
