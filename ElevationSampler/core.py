@@ -330,6 +330,9 @@ class ElevationSampler:
             elevation array where brunnels are linearly interpolted
         """
 
+        if brunnels.shape[0] == 0 and not construct_brunnels:
+            return elevation
+
         # construct brunnels in steep regions
         if construct_brunnels:
 
