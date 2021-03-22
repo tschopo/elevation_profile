@@ -439,8 +439,8 @@ class ElevationSampler:
                 idx = idx[0][0]
 
                 # get index of elevation data
-                start_idx = round((start_dists[idx]) / distance_delta) - 1
-                end_idx = round((end_dists[idx]) / distance_delta) + 1
+                start_idx = np.int64(round((start_dists[idx]) / distance_delta) - 1)
+                end_idx = np.int64(round((end_dists[idx]) / distance_delta) + 1)
 
                 start_ele = None
                 end_ele = None
