@@ -330,9 +330,13 @@ class ElevationSampler:
             elevation array where brunnels are linearly interpolted
         """
 
+        elevation = elevation.copy()
+        distances = distances.copy()
+        brunnels = brunnels.copy()
+
         if brunnels.shape[0] == 0 and not construct_brunnels:
             return elevation
-
+        """
         # construct brunnels in steep regions
         if construct_brunnels:
 
@@ -415,6 +419,7 @@ class ElevationSampler:
 
             brunnels = brunnels.sort_values("start_dist")
             brunnels = brunnels.reset_index(drop=True)
+        """
 
         start_dists = brunnels['start_dist'].values
         end_dists = brunnels['end_dist'].values
@@ -513,6 +518,7 @@ class ElevationSampler:
                 the adjusted elevation
                 
         """
+        elevation = elevation.copy()
 
         elevation = pd.Series(elevation)
         t = elevation.rolling(window_size).std()
@@ -542,6 +548,9 @@ class ElevationSampler:
                 the distances and resampled elevations
         """
 
+        elevation = elevation.copy()
+        distances = distances.copy()
+
         distances_interpolated = np.arange(0, distances[-1], distance)
 
         if distances_interpolated[-1] <= distances[-1]:
@@ -558,8 +567,8 @@ class ElevationSampler:
         """
         Parameters
         ----------
-            elevation : list like
-            distances : list like
+            elevation : numpy array
+            distances : numpy array
         
         Returns
         -------
