@@ -447,13 +447,14 @@ class ElevationSampler:
 
                 # if trip doesnt start with brunnel 
                 if start_idx > 0:
-                    start_ele = ele_brunnel[start_idx]
                     if type(start_idx) != np.int64 and \
                         type(start_idx) != np.int32 and \
                         type(start_idx) != int:
                         print(start_idx)
                         print(ele_brunnel.shape)
                         print(type(start_idx))
+                    start_ele = ele_brunnel[start_idx]
+
 
                 # if trip doesnt end with brunnel:
                 if end_idx < len(ele_brunnel) - 1:
