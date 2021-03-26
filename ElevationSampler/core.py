@@ -1,22 +1,26 @@
-import rasterio
 import geopandas as gpd
-import pandas as pd
 import numpy as np
+import pandas as pd
+import rasterio
+from numpy import ndarray
+from pandas import DataFrame
 from pyproj import CRS
-from shapely.geometry import LineString
+from rasterio import DatasetReader
 from scipy import interpolate
-from shapely.geometry import Point
-from scipy.signal import savgol_filter
 from scipy.signal import argrelextrema
+from scipy.signal import savgol_filter
+from shapely.geometry import LineString
+from shapely.geometry import Point
+from typing import Union, Tuple, Optional, List
 
 
 class ElevationSampler:
 
-    def __init__(self, dem, elevation_band=1):
+    def __init__(self, dem: Union[str, DatasetReader], elevation_band: int = 1):
         """
         Parameters
         ----------
-            dem : str or rasterio raster object
+            dem : str or rasterio DatasetReader
                 location to geotiff with elevation data
         """
         if isinstance(dem, str):
@@ -27,7 +31,7 @@ class ElevationSampler:
 
         print("Loaded dem as EPSG:" + str(self.dem_crs.to_epsg()))
 
-    def sample_point(self, point, interpolated=True):
+    def sample_point(self, point: Point, interpolated: bool = True) -> float:
         """
         Parameters
         ----------
@@ -46,7 +50,7 @@ class ElevationSampler:
 
         return self.sample_coords(p_x, p_y, interpolated=interpolated)
 
-    def sample_coords(self, p_x, p_y, interpolated=True):
+    def sample_coords(self, p_x: float, p_y: float, interpolated: bool = True) -> float:
         """
         Parameters
         ----------
@@ -73,6 +77,8 @@ class ElevationSampler:
         # get raster pixel center
         r_x, r_y = self.dem.xy(row, col)
 
+        row_from, row_to, col_from, col_to = None, None, None, None
+
         # get the correct surrounding raster pixels, depending on point location in raster cell
         if p_x <= r_x and p_y <= r_y:
             row_from = -1
@@ -94,6 +100,11 @@ class ElevationSampler:
             row_to = 1
             col_from = -2
             col_to = 1
+
+        assert row_from is not None
+        assert row_to is not None
+        assert col_from is not None
+        assert col_to is not None
 
         row_from += row
         row_to += row
@@ -121,22 +132,25 @@ class ElevationSampler:
 
         return e
 
-    def elevation_profile(self, line, distance=10, interpolated=True):
+    def elevation_profile(self, line: LineString, distance: float = 10, interpolated: bool = True) \
+            -> Tuple[ndarray, ndarray, ndarray, ndarray]:
         """
         Parameters
         ----------
             line : LineString or GeoSeries
                 either shapely linestring, must be same crs as dem, or geopandas series with 1 linestring entry the crs
                 is converted automatically
-            distance : int
+            distance : float
                 default 10. The distance between the sample points on the line. Last distance may be shorter.
             interpolated : bool
                 if True, then the elevation is bicubic interpolated
         
         Returns
         -------
-            x_coords, y_coords, distance from start, elevations or interpolated_elevations
+            ndarray
+            x_coords, y_coords, distance from start, elevations
                 x and y coords in CRS of dem
+                all arrays have same length
         """
 
         if isinstance(line, gpd.GeoSeries):
@@ -162,155 +176,13 @@ class ElevationSampler:
             sample_point_y_coords.append(p_y)
             sample_point_elevation.append(self.sample_coords(p_x, p_y, interpolated=interpolated))
 
-        return sample_point_x_coords, sample_point_y_coords, np.append(distances, line.length), sample_point_elevation
-
-    def interpolate_brunnels_old(self, elevation, distances, brunnels, trip_geom, distance_delta=10, merge_distance=10,
-                                 filter_brunnel_length=10, buffer_factor=1):
-        """
-        Parameters
-        ----------
-            elevation : numpy array
-                The elevation values
-            distances : numpy array
-                The distances of the elevation values, as returned by method elevation_profile
-            brunnels : GeoDataFrame 
-                Dataframe of Tunnel and Bridges with Linestring of brunnel in "geom" Column. 
-            trip_geom : GeoSeries
-                Geoseries containing the trip Linestring in the "geom" column
-            distance_delta : int
-                distance_delta between distances
-            merge_distance : float
-                Brunnels that are below this distance apart will be merged to one
-            filter_brunnel_length : float
-                Brunnels that are smaller than this will be ignored
-            buffer_factor : float
-                sample distance before and after brunnel is calculated as buffer_factor*distance_delta
-                
-        Returns
-        -------
-            elevation array where brunnels are linearly interpolted
-        """
-
-        if brunnels.crs.to_epsg() != self.dem_crs.to_epsg():
-            brunnels.to_crs(self.dem_crs, inplace=True)
-
-        if trip_geom.crs.to_epsg() != self.dem_crs.to_epsg():
-            trip_geom = trip_geom.to_crs(self.dem_crs)
-
-        # add start_dist, end_dist to brunnel GeoDataFrame
-        brunnels['start_dist'] = np.nan
-        brunnels['end_dist'] = np.nan
-
-        for index, brunnel in brunnels.iterrows():
-
-            start_point = Point(brunnel.geom.coords[0])
-            end_point = Point(brunnel.geom.coords[-1])
-
-            start_dist = trip_geom.project(start_point).iloc[0]
-            end_dist = trip_geom.project(end_point).iloc[0]
-
-            # make brunnels all same direction
-            if start_dist > end_dist:
-                tmp = start_point
-                start_point = end_point
-                end_point = tmp
-
-            # calculate distance with flipped point new
-            brunnels.loc[index, 'start_dist'] = trip_geom.project(start_point).iloc[0]
-            brunnels.loc[index, 'end_dist'] = trip_geom.project(end_point).iloc[0]
-
-        # sort by start_dist
-        brunnels.sort_values(by=['start_dist'], inplace=True)
-        brunnels.reset_index(drop=True, inplace=True)
-
-        drop_idx = []
-        for index, brunnel in brunnels.iterrows():
-
-            # merge adjacent brunnels
-            # + buffer
-            # merge by deleting current row and adjusting values of previous row
-            # print(index)
-            if index > 0 and brunnel['start_dist'] <= brunnels.loc[index - 1, 'end_dist'] + merge_distance:
-                brunnels.loc[index - 1, 'end_dist'] = brunnel['end_dist']
-                brunnels.loc[index - 1, 'geom'] = LineString(
-                    brunnels.loc[index - 1, "geom"].coords[:] + brunnel["geom"].coords[:])
-
-                brunnels.loc[index, 'start_dist'] = brunnels.loc[index - 1, 'start_dist']
-                brunnels.loc[index, 'geom'] = LineString(
-                    brunnels.loc[index - 1, "geom"].coords[:] + brunnel["geom"].coords[:])
-                drop_idx.append(index)
-
-        brunnels.drop(drop_idx, inplace=True)
-
-        # filter the super small tunnels
-        brunnels = brunnels[brunnels.length > filter_brunnel_length]
-
-        start_dists = brunnels['start_dist'].values
-        end_dists = brunnels['end_dist'].values
-
-        ele_brunnel = elevation.copy()
-        for i, x in enumerate(distances):
-
-            # if x in brunnel
-            # get index of brunnel
-            idx = np.argwhere(
-                (x >= start_dists - buffer_factor * distance_delta) & (x <= end_dists + buffer_factor * distance_delta))
-
-            assert idx.size <= 1
-
-            if idx.size == 1:
-
-                idx = idx[0][0]
-
-                # get index of elevation data
-                start_idx = round((start_dists[idx]) / distance_delta) - buffer_factor
-                end_idx = round((end_dists[idx]) / distance_delta) + buffer_factor
-
-                start_ele = None
-                end_ele = None
-
-                # if trip doesnt start with brunnel 
-                if start_idx > 0:
-                    start_ele = ele_brunnel[start_idx]
-
-                # if trip doesnt end with brunnel:
-                if end_idx < len(ele_brunnel) - 1:
-                    end_ele = ele_brunnel[end_idx]
-
-                # if trip start with brunnel
-                if start_ele is None:
-                    start_ele = end_ele
-
-                # if trip ends with brunnel
-                if end_ele is None:
-                    end_ele = start_ele
-
-                # if trip is completely brunnel
-                if start_ele is None and end_ele is None:
-                    # then take ele at start and ele at end as elevations
-                    start_idx = 0
-                    end_idx = round(end_dists[-1] / distance_delta)
-                    start_ele = ele_brunnel[start_idx]
-                    end_ele = ele_brunnel[end_idx]
-
-                assert start_ele is not None
-                assert end_ele is not None
-
-                # linearly interpolate between start and end point
-                # take into account buffer
-                p1 = (start_dists[idx] - buffer_factor * distance_delta, start_ele)
-                p2 = (end_dists[idx] + buffer_factor * distance_delta, end_ele)
-
-                m = (p2[1] - p1[1]) / (p2[0] - p1[0])
-                c = p1[1] - m * p1[0]
-                ele_brunnel[i] = m * x + c
-
-        return ele_brunnel
+        return np.array(sample_point_x_coords), np.array(sample_point_y_coords), \
+               np.append(distances, line.length), np.array(sample_point_elevation)
 
     @staticmethod
-    def interpolate_brunnels(elevation, distances, brunnels, distance_delta=10,
-                             construct_brunnels=True, max_brunnel_length=300,
-                             construct_brunnel_thresh=5, diff_kernel_dist=3):
+    def interpolate_brunnels(elevation: ndarray, distances: ndarray, brunnels: DataFrame, distance_delta: float = 10,
+                             construct_brunnels: bool = True, max_brunnel_length: float = 300,
+                             construct_brunnel_thresh: float = 5, diff_kernel_dist: int = 3) -> ndarray:
         """
         Linearly interpolate between start and endpoint where there are tunnels of bridges.
         Construct bridges over valleys and tunnels through mountains.
@@ -323,12 +195,22 @@ class ElevationSampler:
             distances : numpy array
                 The distances of the elevation values, as returned by method elevation_profile
             brunnels : DataFrame 
-                Dataframe of start_dist and end_dist for each section that shoud be linearly interpolated
-            distance_delta : int
+                Dataframe of start_dist and end_dist for each section that should be linearly interpolated
+            distance_delta : float
                 distance_delta between distances
+            construct_brunnels : bool
+                if True, then add brunnels in steep areas
+            max_brunnel_length : float
+                The maximum length of a constructed brunnel
+            construct_brunnel_thresh : float
+                The elevation delta from one sample point to the next at which a brunnel is attempted to be constructed
+            diff_kernel_dist : int
+                The sample point distance at which the difference is computed for contructing brunnels. E.g. if
+                diff_kernel_dist = 2 then the difference is not taken from the next, but from the one after the next.
         
         Returns
         -------
+            numpy array
             elevation array where brunnels are linearly interpolted
         """
 
@@ -344,8 +226,8 @@ class ElevationSampler:
 
             # construct brunnels in steep regions
 
-            diff_kernel = [1] + [0 for _ in range(diff_kernel_dist-1)] + [-1]
-            #diff_kernel = np.array([1,0, -1])
+            diff_kernel = [1] + [0 for _ in range(diff_kernel_dist - 1)] + [-1]
+            # diff_kernel = np.array([1,0, -1])
             diff = np.convolve(np.array(elevation), diff_kernel, 'same')
 
             start_dists = []
@@ -353,26 +235,26 @@ class ElevationSampler:
             brunnel_types = []
 
             i = 0
-            while i < len(elevation)-1:
+            while i < len(elevation) - 1:
 
                 # bridge when downhill
                 if diff[i] < (construct_brunnel_thresh * (-1)):
 
                     # get maximim in the next 200m
-                    max_i = min(i + 1 + int(max_brunnel_length/distance_delta), len(elevation))
-                    #print(i, max_i, distances[i], distances[max_i])
+                    max_i = min(i + 1 + int(max_brunnel_length / distance_delta), len(elevation))
+                    # print(i, max_i, distances[i], distances[max_i])
 
                     # DEBUG
-                    if i+1 >= max_i:
-                        print(i+1, max_i, len(elevation)-1)
+                    if i + 1 >= max_i:
+                        print(i + 1, max_i, len(elevation) - 1)
 
-                    assert(i+1 < max_i)
+                    assert (i + 1 < max_i)
 
                     # get the idx if the maximum in the next 200m
                     max_idx = np.argmax(elevation[i + 1:max_i])
                     max_idx = max_idx + i + 1
-                    #print("max_idx ", max_idx)
-                    #print("------")
+                    # print("max_idx ", max_idx)
+                    # print("------")
                     start_dists.append(distances[i])
                     end_dists.append(distances[max_idx])
                     brunnel_types.append("bridge")
@@ -397,7 +279,7 @@ class ElevationSampler:
                 # tunnel bei aufstieg
                 elif diff[i] > construct_brunnel_thresh:
 
-                    max_i = min(i + 1 + int(max_brunnel_length/distance_delta), len(elevation)-1)
+                    max_i = min(i + 1 + int(max_brunnel_length / distance_delta), len(elevation) - 1)
                     # get minimum in the next 200m
                     max_idx = np.argmin(elevation[i + 1:max_i])
                     max_idx = max_idx + i + 1
@@ -431,8 +313,8 @@ class ElevationSampler:
 
             # overlaps if end_point is larger than startpoint of next brunnel
             # then also check if next brunnel overlaps (multiple consecutive overlapping brunnels)
-            #print(start_dists)
-            #print(end_dists)
+            # print(start_dists)
+            # print(end_dists)
 
             start_dists, end_dists = _filter_overlapping(start_dists.copy(), end_dists.copy())
 
@@ -444,9 +326,6 @@ class ElevationSampler:
 
             # filter small brunnels
             constructed_brunnels = constructed_brunnels[constructed_brunnels.length > distance_delta]
-
-
-
 
             # check if constructed brunnel overlaps with real brunnel
             # if overlaps --> discard
@@ -473,7 +352,6 @@ class ElevationSampler:
 
             brunnels = brunnels.sort_values("start_dist")
             brunnels = brunnels.reset_index(drop=True)
-
 
         start_dists = brunnels['start_dist'].values
         end_dists = brunnels['end_dist'].values
@@ -507,13 +385,12 @@ class ElevationSampler:
                 # if trip doesnt start with brunnel 
                 if start_idx > 0:
                     if type(start_idx) != np.int64 and \
-                        type(start_idx) != np.int32 and \
-                        type(start_idx) != int:
+                            type(start_idx) != np.int32 and \
+                            type(start_idx) != int:
                         print(start_idx)
                         print(ele_brunnel.shape)
                         print(type(start_idx))
                     start_ele = ele_brunnel[start_idx]
-
 
                 # if trip doesnt end with brunnel:
                 if end_idx < len(ele_brunnel) - 1:
@@ -550,14 +427,19 @@ class ElevationSampler:
         return ele_brunnel
 
     @staticmethod
-    def adjust_forest_height(elevation, distances=None, method="variance", window_size=12, std_thresh=3, sub_factor=3, clip=20):
+    def adjust_forest_height(elevation: ndarray, distances: Optional[ndarray] = None, method: str = "variance",
+                             window_size: int = 12, std_thresh: float = 3, sub_factor: float = 2,
+                             clip: int = 20, minimum_loops: int = 1) -> ndarray:
         """
         Compute a rolling standard deviation and substract height in areas with high std.
         
         Parameters
         ----------
+
             elevation : numpy array
                 the elevation data
+            distances : numpy array or None
+                distances array if method is "minimum"
             method : "variance" or "minimum"
                 if "variance": substracts the variance in areas with high standard deviation
                 if "minimum": fits a function through the local minima. must suply distances array
@@ -567,8 +449,10 @@ class ElevationSampler:
             sub_factor: float
                 the std is multiplied by this factor and subtracted
             clip: float
-                the maximm value that is subtracted
-        
+                the maximum value that is subtracted
+            minimum_loops
+                how often the minima a resampled.
+
         Returns
         -------
             elevation : numpy array
@@ -585,19 +469,23 @@ class ElevationSampler:
         elif method == "minimum":
             if distances is None:
                 raise Exception("must suply distances for method='minimum'")
-            minima = argrelextrema(elevation, np.less)
-            _, elevation = ElevationSampler.resample_ele(elevation[minima], distances[minima], distances)
+
+            for _ in range(minimum_loops):
+                minima = argrelextrema(elevation, np.less)
+                _, elevation = ElevationSampler.resample_ele(elevation[minima], distances[minima], distances)
+
         else:
             raise Exception("must suply either method='variance' or method='minimum'")
 
         return elevation
 
     @staticmethod
-    def smooth_ele(elevation, window_size=301, poly_order=3, mode="nearest"):
+    def smooth_ele(elevation: ndarray, window_size: int = 301, poly_order: int = 3, mode: str = "nearest") -> ndarray:
         return savgol_filter(elevation, window_size, poly_order, mode=mode)
 
     @staticmethod
-    def resample_ele(elevation, distances, distance):
+    def resample_ele(elevation: ndarray, distances: ndarray, distance: Union[float, ndarray]) \
+            -> Tuple[ndarray, ndarray]:
         """
         Resamples the elevation every n distance. (last elevation is also returned)
         
@@ -611,7 +499,7 @@ class ElevationSampler:
                 if float equidistant resampling.
         Returns
         -------
-            (numpay array, numpy array)
+            (numpy array, numpy array)
                 the distances and resampled elevations
         """
 
@@ -633,12 +521,13 @@ class ElevationSampler:
         # return subset of elevation, resampled at distance
 
     @staticmethod
-    def ele_to_incl(elevation, distances, degrees=False):
+    def ele_to_incl(elevation: ndarray, distances: ndarray, degrees: bool = False):
         """
         Parameters
         ----------
             elevation : numpy array
             distances : numpy array
+            degrees : bool
         
         Returns
         -------
@@ -664,34 +553,7 @@ class ElevationSampler:
         # return cumulative ascent and descent
 
 
-
-
-def _filter_overlapping(start_dists, end_dists, algo="stack"):
-
-    start_dists = start_dists.copy()
-    end_dists = end_dists.copy()
-
-    """
-    drop_idx = []
-    for i in range(len(start_dists) - 1):
-        j = i
-        new_end_dist = end_dists[i]
-
-        # while end dist of examined brunnel is bigger than the start dist of next brunnel
-        while (j < len(start_dists) - 1 and end_dists[j] >= start_dists[j + 1]):
-            if end_dists[j + 1] > new_end_dist:
-                new_end_dist = end_dists[j + 1]
-            j += 1
-            drop_idx.append(j)
-        end_dists[i] = new_end_dist
-
-    start_dists = [j for i, j in enumerate(start_dists) if i not in drop_idx]
-    end_dists = [j for i, j in enumerate(end_dists) if i not in drop_idx]
-    
-    return start_dists, end_dists
-
-    """
-
+def _filter_overlapping(start_dists: List[float], end_dists: List[float]) -> Tuple[List[float], List[float]]:
     # stack contains previous elements
     start_dist_stack = []
     end_dist_stack = []
@@ -699,7 +561,7 @@ def _filter_overlapping(start_dists, end_dists, algo="stack"):
     start_dist_stack.append(start_dists[0])
     end_dist_stack.append(end_dists[0])
 
-    for i in range(0,len(start_dists)):
+    for i in range(0, len(start_dists)):
 
         # check if not overlaps with stack top
         if start_dists[i] > end_dist_stack[-1]:
@@ -709,11 +571,9 @@ def _filter_overlapping(start_dists, end_dists, algo="stack"):
             end_dist_stack.append(end_dists[i])
 
         # if overlaps with stack top and end dist is greater
-        elif start_dists[i] <= end_dist_stack[-1] and \
-            end_dists[i] > end_dist_stack[-1]:
+        elif start_dists[i] <= end_dist_stack[-1] < end_dists[i]:
 
             # update the endtime of stack top
             end_dist_stack[-1] = end_dists[i]
 
     return start_dist_stack, end_dist_stack
-
