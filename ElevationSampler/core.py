@@ -1,7 +1,10 @@
+from typing import Union, Tuple, Optional, List
+
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
+from geopandas import GeoSeries
 from numpy import ndarray
 from pandas import DataFrame
 from pyproj import CRS
@@ -11,7 +14,6 @@ from scipy.signal import argrelextrema
 from scipy.signal import savgol_filter
 from shapely.geometry import LineString
 from shapely.geometry import Point
-from typing import Union, Tuple, Optional, List
 
 
 class ElevationSampler:
@@ -132,7 +134,7 @@ class ElevationSampler:
 
         return e
 
-    def elevation_profile(self, line: LineString, distance: float = 10, interpolated: bool = True) \
+    def elevation_profile(self, line: Union[LineString, GeoSeries], distance: float = 10, interpolated: bool = True) \
             -> Tuple[ndarray, ndarray, ndarray, ndarray]:
         """
         Parameters
@@ -177,7 +179,7 @@ class ElevationSampler:
             sample_point_elevation.append(self.sample_coords(p_x, p_y, interpolated=interpolated))
 
         return np.array(sample_point_x_coords), np.array(sample_point_y_coords), \
-               np.append(distances, line.length), np.array(sample_point_elevation)
+            np.append(distances, line.length), np.array(sample_point_elevation)
 
     @staticmethod
     def interpolate_brunnels(elevation: ndarray, distances: ndarray, brunnels: DataFrame, distance_delta: float = 10,
@@ -429,7 +431,7 @@ class ElevationSampler:
     @staticmethod
     def adjust_forest_height(elevation: ndarray, distances: Optional[ndarray] = None, method: str = "variance",
                              window_size: int = 12, std_thresh: float = 3, sub_factor: float = 2,
-                             clip: int = 20, minimum_loops: int = 1) -> ndarray:
+                             clip: float = 20, minimum_loops: int = 1) -> ndarray:
         """
         Compute a rolling standard deviation and substract height in areas with high std.
         
