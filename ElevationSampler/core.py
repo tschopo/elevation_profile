@@ -281,7 +281,10 @@ class ElevationSampler:
                 # tunnel bei aufstieg
                 elif diff[i] > construct_brunnel_thresh:
 
-                    max_i = min(i + 1 + int(max_brunnel_length / distance_delta), len(elevation) - 1)
+                    max_i = min(i + 1 + int(max_brunnel_length / distance_delta), len(elevation))
+
+                    assert (i + 1 < max_i)
+
                     # get minimum in the next 200m
                     max_idx = np.argmin(elevation[i + 1:max_i])
                     max_idx = max_idx + i + 1
@@ -550,9 +553,33 @@ class ElevationSampler:
                 slopes.append(rise / run * 1000)
 
         return np.array(slopes)
+# TODO make static funations as funcitons
 
-        # def cum_asc_desc
-        # return cumulative ascent and descent
+
+    @staticmethod
+    def cum_asc_desc(elevation: ndarray) -> Tuple[int, int]:
+        """
+
+        Parameters
+        ----------
+        elevation
+
+        Returns
+        -------
+            int, int
+            cumulative ascent and descent
+        """
+        # subtract with next elevation
+        ele_diff = elevation[:-1] - elevation[1:]
+        asc = ele_diff.copy()
+        desc = ele_diff.copy()
+
+        asc[asc < 0] = 0
+        desc[desc>0] = 0
+
+        tot_asc = np.sum(asc)
+        tot_desc = np.sum(desc)
+        return tot_asc, tot_desc
 
 
 def _filter_overlapping(start_dists: List[float], end_dists: List[float]) -> Tuple[List[float], List[float]]:
