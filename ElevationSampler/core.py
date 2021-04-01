@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Optional
 
 import geopandas as gpd
 import numpy as np
@@ -20,8 +20,10 @@ from shapely.geometry import Point
 class ElevationProfile:
 
     def __init__(self, distances: ndarray, elevations: ndarray):
-        self.distances = distances
-        self.elevations = elevations
+        self.distances = np.array(distances)
+        self.elevations = np.array(elevations)
+        self.distances_orig = np.array(distances)
+        self.elevations_orig = np.array(elevations)
 
     def elevation(self, distance: float) -> float:
         """
@@ -61,7 +63,7 @@ class ElevationProfile:
 
         return self.distances.copy()
 
-    def interpolate_brunnels(self, brunnels: DataFrame, distance_delta: float = 10,
+    def interpolate_brunnels(self, brunnels: DataFrame, distance_delta: Optional[float] = None,
                              construct_brunnels: bool = True, max_brunnel_length: float = 300,
                              construct_brunnel_thresh: float = 5, diff_kernel_dist: int = 3) -> ElevationProfile:
         """
@@ -74,7 +76,7 @@ class ElevationProfile:
             brunnels : DataFrame
                 Dataframe of start_dist and end_dist for each section that should be linearly interpolated
             distance_delta : float
-                distance_delta between distances
+                distance_delta between distances, if None then the distance_delta is calculated from distances
             construct_brunnels : bool
                 if True, then add brunnels in steep areas
             max_brunnel_length : float
@@ -94,6 +96,13 @@ class ElevationProfile:
         elevation = self.elevations.copy()
         distances = self.distances.copy()
         brunnels = brunnels.copy()
+
+        if distance_delta is None:
+            # check if equidistant
+            if np.sum(self.distances[:-2] - self.distances[1:-1]) > 0.1:
+                raise Exception("Distances must be equidistant. Resample first!")
+
+            distance_delta = distances[1] - distances[0]
 
         if brunnels.shape[0] == 0 and not construct_brunnels:
             return self
@@ -286,8 +295,9 @@ class ElevationProfile:
                 if "variance": substracts the variance in areas with high standard deviation
                 if "minimum": fits a function through the local minima. must suply distances array
             window_size : int
+                window size used for the rolling window function for std
             std_thresh : float
-                if std above this value then substract
+                if std above this value then subtract
             sub_factor: float
                 the std is multiplied by this factor and subtracted
             clip: float
@@ -417,6 +427,25 @@ class ElevationProfile:
         """
 
         return self.cumulative_ascent(), self.cumulative_descent()
+
+    def reset(self):
+        """
+        reset the elevations and distances array to original.
+
+        Returns
+        -------
+
+        """
+        self.elevations = self.elevations_orig.copy()
+        self.distances = self.distances_orig.copy()
+
+        return self
+
+    def copy(self):
+        copied = ElevationProfile(self.distances_orig, self.elevations_orig)
+        copied.distances = self.distances.copy()
+        copied.elevations = self.elevations.copy()
+        return copied
 
 
 class DEM:

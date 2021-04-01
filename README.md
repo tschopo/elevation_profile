@@ -47,7 +47,6 @@ data = {'start_dist' : [10],
         'end_dist':[20]} 
 brunnels = pd.DataFrame(data) 
 
-# TODO calc sample_distance automatically, if not equidistant raise error
 elevation_profile = elevation_profile.interpolate_brunnels(brunnels, sample_distance)
 
 # adjust the elevation profile where there is high variance (forests / urban areas)
