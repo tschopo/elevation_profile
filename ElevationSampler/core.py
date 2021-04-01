@@ -402,7 +402,7 @@ class ElevationProfile:
         return np.sum(asc)
 
     def cumulative_descent(self) -> float:
-        return self.cumulative_ascent(ascending=True)
+        return self.cumulative_ascent(ascending=False)
 
     def cum_asc_desc(self) -> Tuple[float, float]:
         """
