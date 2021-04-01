@@ -1,1 +1,1 @@
-from .core import ElevationSampler
+from .core import DEM, ElevationProfile

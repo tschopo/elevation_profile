@@ -1,13 +1,14 @@
 from setuptools import setup
+
 setup(name='ElevationSampler',
-version='1.0',
-description='Sample elevation from DEM',
-url='#',
-author='Johannes Polster',
-author_email='johannes.polster@posteo.de',
-license='MIT',
-packages=['ElevationSampler'],
-install_requires=[
+      version='2.0',
+      description='Sample elevation from DEM',
+      url='#',
+      author='Johannes Polster',
+      author_email='johannes.polster@posteo.de',
+      license='MIT',
+      packages=['ElevationSampler'],
+      install_requires=[
           'rasterio',
           'geopandas',
           'pandas',
@@ -16,5 +17,4 @@ install_requires=[
           'shapely',
           'scipy'
       ],
-zip_safe=True)
-
+      zip_safe=True)
