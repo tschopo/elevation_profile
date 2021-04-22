@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Union, Tuple, List, Optional
 
 import geopandas as gpd
-import numpy as np
 import pandas as pd
 import rasterio
 from geopandas import GeoSeries
@@ -15,6 +14,7 @@ from scipy.signal import argrelextrema
 from scipy.signal import savgol_filter
 from shapely.geometry import LineString
 from shapely.geometry import Point
+import numpy as np
 
 
 class ElevationProfile:
@@ -63,9 +63,20 @@ class ElevationProfile:
 
         return self.distances.copy()
 
+    def _check_distance_delta(self, distance_delta: float) -> float:
+
+        if distance_delta is None:
+            # check if equidistant
+            if np.sum(self.distances[:-2] - self.distances[1:-1]) > 0.1:
+                raise Exception("Distances must be equidistant. Resample first!")
+
+            distance_delta = self.distances[1] - self.distances[0]
+
+        return distance_delta
+
     def interpolate_brunnels(self, brunnels: DataFrame, distance_delta: Optional[float] = None,
                              construct_brunnels: bool = True, max_brunnel_length: float = 300,
-                             construct_brunnel_thresh: float = 5, diff_kernel_dist: int = 3) -> ElevationProfile:
+                             construct_brunnel_thresh: float = 5, diff_kernel_dist: int = 6) -> ElevationProfile:
         """
         Linearly interpolate between start and endpoint where there are tunnels of bridges.
         Construct bridges over valleys and tunnels through mountains.
@@ -84,25 +95,20 @@ class ElevationProfile:
             construct_brunnel_thresh : float
                 The elevation delta from one sample point to the next at which a brunnel is attempted to be constructed
             diff_kernel_dist : int
-                The sample point distance at which the difference is computed for contructing brunnels. E.g. if
+                The sample point distance at which the difference is computed for constructing brunnels. E.g. if
                 diff_kernel_dist = 2 then the difference is not taken from the next, but from the one after the next.
 
         Returns
         -------
             numpy array
-            elevation array where brunnels are linearly interpolted
+            elevation array where brunnels are linearly interpolated
         """
 
         elevation = self.elevations.copy()
         distances = self.distances.copy()
         brunnels = brunnels.copy()
 
-        if distance_delta is None:
-            # check if equidistant
-            if np.sum(self.distances[:-2] - self.distances[1:-1]) > 0.1:
-                raise Exception("Distances must be equidistant. Resample first!")
-
-            distance_delta = distances[1] - distances[0]
+        distance_delta = self._check_distance_delta(distance_delta)
 
         if brunnels.shape[0] == 0 and not construct_brunnels:
             return self
@@ -126,7 +132,7 @@ class ElevationProfile:
                 # bridge when downhill
                 if diff[i] < (construct_brunnel_thresh * (-1)):
 
-                    # get maximim in the next 200m
+                    # get maximum in the next 200m
                     max_i = min(i + 1 + int(max_brunnel_length / distance_delta), len(elevation))
                     # print(i, max_i, distances[i], distances[max_i])
 
@@ -145,7 +151,7 @@ class ElevationProfile:
                     end_dists.append(distances[max_idx])
                     brunnel_types.append("bridge")
 
-                # tunnel bei aufstieg
+                # tunnel if incline
                 elif diff[i] > construct_brunnel_thresh:
 
                     max_i = min(i + 1 + int(max_brunnel_length / distance_delta), len(elevation))
@@ -163,7 +169,7 @@ class ElevationProfile:
 
             # merge overlapping brunnels
 
-            # overlaps if end_point is larger than startpoint of next brunnel
+            # overlaps if end_point is larger than start point of next brunnel
             # then also check if next brunnel overlaps (multiple consecutive overlapping brunnels)
             # print(start_dists)
             # print(end_dists)
@@ -189,7 +195,7 @@ class ElevationProfile:
                 end_in_brunnel = (brunnel.end_dist >= brunnels['start_dist']) & (
                         brunnel.end_dist <= brunnels['end_dist'])
 
-                # chick if constructed a brunnel arround an existing one
+                # chick if constructed a brunnel around an existing one
                 # check if start is smaller than start and end ist larger than end
                 around_brunnel = (brunnel.start_dist <= brunnels['start_dist']) & (
                         brunnel.end_dist >= brunnels['end_dist'])
@@ -292,8 +298,9 @@ class ElevationProfile:
         ----------
 
             method : "variance" or "minimum"
-                if "variance": substracts the variance in areas with high standard deviation
-                if "minimum": fits a function through the local minima. must suply distances array
+                if "variance": subtracts the variance in areas with high standard deviation: should use in conjunction
+                with smooth
+                if "minimum": fits a function through the local minima. must supply distances array
             window_size : int
                 window size used for the rolling window function for std
             std_thresh : float
@@ -345,7 +352,7 @@ class ElevationProfile:
         ----------
 
             distance : float or numpy array
-                the distance values from wich the resampled elevation values are drawn from
+                the distance values from which the resampled elevation values are drawn from
                 if float equidistant resampling.
         Returns
         -------
@@ -463,7 +470,12 @@ class DEM:
         """
 
         self.dem = rasterio.open(file)
-        self.elev = self.dem.read(elevation_band)
+
+        elev = self.dem.read(elevation_band)
+
+        # pad the elevation array, so that not out of bounds
+        self.elev = np.pad(elev, 2, mode='edge')
+
         self.crs = CRS.from_wkt(self.dem.crs.to_wkt())
 
         print("Loaded dem as EPSG:" + str(self.crs.to_epsg()))
@@ -508,11 +520,20 @@ class DEM:
         # get the index of the raster pixel containing the point
         row, col = self.dem.index(p_x, p_y)
 
+        # return nan value if not in raster
+        if not ((self.dem.bounds.bottom <= p_y <= self.dem.bounds.top) and
+                (self.dem.bounds.left <= p_x <= self.dem.bounds.right)):
+            return np.nan
+
         if not interpolated:
-            return self.elev[row, col]
+            return self.elev[row+2, col+2]  # +2 because of padding
 
         # get raster pixel center
         r_x, r_y = self.dem.xy(row, col)
+
+        # because elev is padded
+        row = row + 2
+        col = col + 2
 
         row_from, row_to, col_from, col_to = None, None, None, None
 
@@ -548,11 +569,11 @@ class DEM:
         col_from += col
         col_to += col
 
-        # the 16 supporting points of the interpolattion
+        # the 16 supporting points of the interpolation
         z = self.elev[row_from:row_to + 1, col_from:col_to + 1]
         z = z.flatten()
 
-        # get the coordinates for each supporintg point
+        # get the coordinates for each supporting point
         x_coors = []
         y_coors = []
         for row in range(row_from, row_to + 1):
@@ -580,7 +601,7 @@ class DEM:
             distance : float
                 default 10. The distance between the sample points on the line. Last distance may be shorter.
             interpolated : bool
-                if True, then the elevation is bicubic interpolated
+                if True, then the elevation is bicubic interpolated.
         
         Returns
         -------
@@ -601,16 +622,12 @@ class DEM:
         distances = np.arange(0, line.length, distance)
         sample_points = [line.interpolate(d) for d in distances] + [line.boundary[1]]
 
-        sample_point_x_coords = []
-        sample_point_y_coords = []
         sample_point_elevation = []
 
         for sample_point in sample_points:
             p_x = sample_point.x
             p_y = sample_point.y
 
-            sample_point_x_coords.append(p_x)
-            sample_point_y_coords.append(p_y)
             sample_point_elevation.append(self.sample_coords(p_x, p_y, interpolated=interpolated))
 
         distances = np.append(distances, line.length)
@@ -652,7 +669,7 @@ def _filter_overlapping(start_dists: List[float], end_dists: List[float]) -> Tup
         # if overlaps with stack top and end dist is greater
         elif start_dists[i] <= end_dist_stack[-1] < end_dists[i]:
 
-            # update the endtime of stack top
+            # update the end dist of stack top
             end_dist_stack[-1] = end_dists[i]
 
     return start_dist_stack, end_dist_stack
