@@ -330,6 +330,10 @@ class ElevationProfile:
             for _ in range(minimum_loops):
                 minima = argrelextrema(elevation, np.less)
 
+                # if there is only 1 or less minima, this method doesn't make sense
+                if len(minima) < 2:
+                    return self
+
                 elevation = ElevationProfile(distances[minima], elevation[minima]).resample(distances).elevations
                 # _, elevation = ElevationSampler.resample_ele(distances)
 
@@ -620,7 +624,11 @@ class DEM:
         # 3. process the line to obtain evenly spaced sample points along the line
         # https://stackoverflow.com/questions/62990029/how-to-get-equally-spaced-points-on-a-line-in-shapely
         distances = np.arange(0, line.length, distance)
-        sample_points = [line.interpolate(d) for d in distances] + [line.boundary[1]]
+
+        # cannot use line.boundary[1] for last point because if line is a circle boundary is empty
+        # so we use las coords to construct last point
+        last_coord = line.coords[-1]
+        sample_points = [line.interpolate(d) for d in distances] + [Point(last_coord[0], last_coord[1])]
 
         sample_point_elevation = []
 
