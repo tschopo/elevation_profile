@@ -412,7 +412,7 @@ class ElevationProfile:
     def cumulative_ascent(self, ascending=True) -> float:
 
         # subtract with next elevation
-        ele_diff = self.elevations[:-1] - self.elevations[1:]
+        ele_diff = self.elevations[1:] - self.elevations[:-1]
         asc = ele_diff.copy()
 
         if ascending:
