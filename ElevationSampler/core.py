@@ -658,6 +658,10 @@ def _filter_overlapping(start_dists: List[float], end_dists: List[float]) -> Tup
     -------
 
     """
+
+    if len(start_dists) == 0:
+        return [], []
+
     # stack contains previous elements
     start_dist_stack = []
     end_dist_stack = []
