@@ -15,6 +15,7 @@ from scipy.signal import savgol_filter
 from shapely.geometry import LineString
 from shapely.geometry import Point
 import numpy as np
+from matplotlib import pyplot as plt
 
 
 class ElevationProfile:
@@ -385,7 +386,7 @@ class ElevationProfile:
         Parameters
         ----------
             degrees : bool
-                if True returns inclination in degrees, if False in promille
+                if True returns inclination in degrees, if False in per mille.
 
         Returns
         -------
@@ -457,6 +458,42 @@ class ElevationProfile:
         copied.distances = self.distances.copy()
         copied.elevations = self.elevations.copy()
         return copied
+
+    def flip(self):
+        """
+        Flip the elevation profile so that start = end and end = start.
+
+        Returns
+        -------
+
+        """
+
+        self.distances_orig = self.distances_orig[-1] - self.distances_orig[::-1]
+        self.distances = self.distances[-1] - self.distances[::-1]
+        self.elevations_orig = self.elevations_orig[::-1]
+        self.elevations = self.elevations_orig[::-1]
+
+        return self
+
+    def plot(self, *plot_args, plot_kwargs=None):
+        """
+        Plot the elevation profile with pyplot.plot()
+
+        Parameters
+        ----------
+        plot_args :
+            additional arguments for the pyplot.plot function
+        plot_kwargs : dict
+            dictionary of keyword arguments for the pyplot.plot function
+
+        Returns
+        -------
+
+        """
+
+        plt.figure()
+        plt.plot(self.distances, self.elevations, *plot_args, **plot_kwargs)
+        plt.show()
 
 
 class DEM:
