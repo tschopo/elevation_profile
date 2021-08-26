@@ -80,7 +80,7 @@ class ElevationProfile:
                              construct_brunnel_thresh: float = 5, diff_kernel_dist: int = 6) -> ElevationProfile:
         """
         Linearly interpolate between start and endpoint where there are tunnels of bridges.
-        Construct bridges over valleys and tunnels through mountains.
+        Automatically construct bridges over steep valleys and tunnels through steep mountains.
 
         Parameters
         ----------
@@ -491,6 +491,9 @@ class ElevationProfile:
 
         """
 
+        if plot_kwargs is None:
+            plot_kwargs = {}
+
         plt.figure()
         plt.plot(self.distances, self.elevations, *plot_args, **plot_kwargs)
         plt.show()
@@ -634,6 +637,9 @@ class DEM:
     def elevation_profile(self, line: Union[LineString, GeoSeries], distance: float = 10, interpolated: bool = True) \
             -> ElevationProfile:
         """
+        Given a Line Geometry and a distance, uniformly samples from the DEM along the Line. Optionally performs bicubic
+        interpolation when sampling. Returns an ElevationProfile Object.
+
         Parameters
         ----------
             line : LineString or GeoSeries
@@ -646,10 +652,7 @@ class DEM:
         
         Returns
         -------
-            ndarray
-            x_coords, y_coords, distance from start, elevations
-                x and y coords in CRS of dem
-                all arrays have same length
+            ElevationProfile
         """
 
         if isinstance(line, gpd.GeoSeries):
@@ -663,7 +666,7 @@ class DEM:
         distances = np.arange(0, line.length, distance)
 
         # cannot use line.boundary[1] for last point because if line is a circle boundary is empty
-        # so we use las coords to construct last point
+        # so we use last coords to construct last point
         last_coord = line.coords[-1]
         sample_points = [line.interpolate(d) for d in distances] + [Point(last_coord[0], last_coord[1])]
 
