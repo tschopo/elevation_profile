@@ -329,7 +329,7 @@ class ElevationProfile:
             elevation = elevation.values
         elif method == "minimum":
             for _ in range(minimum_loops):
-                minima = argrelextrema(elevation, np.less)
+                minima = argrelextrema(elevation, np.less)[0]
 
                 # if there is only 1 or less minima, this method doesn't make sense
                 if len(minima) < 2:
