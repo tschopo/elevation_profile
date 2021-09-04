@@ -475,7 +475,7 @@ class ElevationProfile:
 
         return self
 
-    def plot(self, *plot_args, plot_kwargs=None):
+    def plot(self, *plot_args, xlabel='elevation', ylabel='distance', title='Elevation Profile', plot_kwargs=None):
         """
         Plot the elevation profile with pyplot.plot()
 
@@ -496,6 +496,9 @@ class ElevationProfile:
 
         plt.figure()
         plt.plot(self.distances, self.elevations, *plot_args, **plot_kwargs)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.title(title)
         plt.show()
 
 

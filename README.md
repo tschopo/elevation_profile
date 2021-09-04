@@ -1,4 +1,5 @@
 # ElevationSampler
+![Elevation Profile](elevation_profile.png)
 
 ## Description
 
@@ -64,6 +65,9 @@ inclination = elevation_profile.inclination(degrees=True)
 # get the cumulative ascent of the profile
 print(elevation_profile.cumulative_ascent())
 
+# plot the profile
+elevation_profile.plot()
+
 distances = elevation_profile.distances
 elevations = elevation_profile.elevations
  
@@ -79,5 +83,6 @@ Should be automatically installed when installing with pip
 'numpy',
 'pyproj',
 'shapely',
-'scipy'
+'scipy',
+'matplotlib'
 ```
